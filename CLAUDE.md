@@ -21,6 +21,9 @@ user sees. Logic belongs in `src/`, one concern per file:
 | `src/install.ts`       | version stamp and the `rsync` into place                       |
 | `src/environment-d.ts` | the `systemd --user` environment drop-in                        |
 
+`scripts/build-release.ts` builds the cross-compiled binaries a GitHub release
+carries; it is the only thing `.releaserc.json` runs at release time.
+
 ## Invariants — don't weaken these
 
 1. **Nothing is used before it is verified.** Signature over `InRelease` →
@@ -48,6 +51,19 @@ user sees. Logic belongs in `src/`, one concern per file:
 - `Bun.file` / `Bun.write` for I/O; `node:fs` only for the sync directory checks.
 - Failures are fatal and go through `die()` — no thrown strings, no partial installs.
 - Tabs for indentation. Comments explain *why*; the code already says what.
+- Conventional Commits, angular preset — the released version is derived from
+  them (see Releasing). `feat:` / `fix:` for anything that ships; `ci:`,
+  `docs:`, `chore:`, `test:`, `refactor:` for everything that doesn't.
+
+## Releasing
+
+Pushing to `main` runs `.github/workflows/release.yml`: semantic-release reads
+the Conventional Commit messages since the last tag, works out the version,
+runs `bun scripts/build-release.ts <version>` and attaches the binaries and
+`SHA256SUMS` to a GitHub release. So commit messages are load-bearing — a change
+that should ship needs a `fix:` or `feat:` subject. Nothing is committed back to
+the branch: there is no version field anywhere to keep in step, and the tag is
+the record.
 
 ## Testing
 

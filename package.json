@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "bun build --compile --sourcemap index.ts --outfile dist/apt-extract",
+    "build:release": "bun scripts/build-release.ts",
     "test": "bun test",
     "typecheck": "tsc"
   }

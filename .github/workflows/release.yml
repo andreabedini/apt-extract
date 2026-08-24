@@ -1,0 +1,58 @@
+# Release on every push to main: semantic-release reads the commit messages,
+# decides the version, builds the binaries for it and publishes them.
+#
+# Nothing is committed back to the branch — the tag and the GitHub release are
+# the record, there is no version field in package.json to keep in step.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# One release at a time; never cancel one half-published.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag, create the release, upload the assets
+      issues: write # semantic-release comments on what a release closes
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the whole history: that is what the next version is derived from
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # semantic-release itself runs on Node, not Bun.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run typecheck
+
+      # gpg, dpkg and rsync are all present on the runner. tamper.test.ts skips
+      # itself: naming a real repository here would put a vendor URL in the repo.
+      - run: bun test
+
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          npx --yes
+          -p semantic-release@25
+          -p @semantic-release/exec@7
+          -p @semantic-release/github@12
+          semantic-release

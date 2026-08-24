@@ -80,6 +80,41 @@ bun build --compile --sourcemap --target=bun-linux-arm64 index.ts \
 The binary still shells out to `gpg`, `dpkg-deb`, `rsync` and `sudo` — see
 Requirements below. Only `bun` stops being needed.
 
+## Releases
+
+Pushing to `main` runs `.github/workflows/release.yml`, which hands the work to
+[semantic-release](https://semantic-release.org): it reads the commit messages
+since the last tag, decides whether that is a patch, a minor or a major, builds
+the binaries for that version and publishes them as a GitHub release. Nothing is
+committed back to the branch — the tag and the release are the record, and there
+is no version field to keep in step.
+
+So the commit messages decide the version. Conventional Commits, angular preset:
+
+| commit                                   | effect        |
+| ---------------------------------------- | ------------- |
+| `fix: reject an expired Valid-Until`     | patch release |
+| `feat: add --pick`                       | minor release |
+| a `BREAKING CHANGE:` footer, or `feat!:` | major release |
+| `docs:`, `chore:`, `test:`, `refactor:`  | no release    |
+
+Each release carries one binary per target in `scripts/build-release.ts`
+(currently `linux-x64` and `linux-arm64`) and a `SHA256SUMS` file:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing
+sudo install -m 0755 apt-extract-1.2.3-linux-x64 /usr/local/bin/apt-extract
+```
+
+The same build runs locally, which is the way to check a release build without
+tagging one:
+
+```sh
+bun run build:release 1.2.3   # dist/apt-extract-1.2.3-linux-{x64,arm64} + SHA256SUMS
+```
+
+The workflow needs no secrets beyond the `GITHUB_TOKEN` Actions provides.
+
 ## Requirements
 
 `bun`, `gpg`, `dpkg` and `dpkg-deb` (Fedora: `dnf install dpkg`), `rsync`, and
