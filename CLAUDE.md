@@ -1,8 +1,10 @@
 # Working on this repo
 
 A single-purpose CLI that installs a package from a Debian apt repository onto a
-non-Debian system by extracting it into `<dest>/<package>`. See `README.md` for
-the reasoning; this file is the working agreement.
+non-Debian system by extracting it into `<dest>/<package>`. A single `.deb` — a
+local path or a URL — can be named instead of a repository, in which case there
+is no chain of trust and the tool says so. See `README.md` for the reasoning;
+this file is the working agreement.
 
 ## Layout
 
@@ -17,7 +19,7 @@ user sees. Logic belongs in `src/`, one concern per file:
 | `src/gpg.ts`           | signature verification and fingerprint pinning                 |
 | `src/repo.ts`          | repository access, with the hash chain enforced at each hop     |
 | `src/select.ts`        | listing versions and choosing one                              |
-| `src/deb.ts`           | download, unpack, subtree detection                            |
+| `src/deb.ts`           | download, unpack, subtree detection, a `.deb` named directly   |
 | `src/install.ts`       | version stamp and the `rsync` into place                       |
 | `src/environment-d.ts` | the `systemd --user` environment drop-in                        |
 
@@ -29,10 +31,18 @@ carries; it is the only thing `.releaserc.json` runs at release time.
 1. **Nothing is used before it is verified.** Signature over `InRelease` →
    SHA256 of the package index from that verified `InRelease` → SHA256 of the
    `.deb` from that verified index. Every hop, every run.
+
+   A `.deb` named directly has no index, and is never dressed up as if it had
+   one: it prints its digest and says nothing vouched for it. `sha256 ok` is
+   printed only when `--sha256` gave it something to fail against, and
+   `Stamp.trust` records which of the two happened. Repository options are
+   refused on that path rather than ignored — an accepted `--fingerprint` would
+   read as a signature check that never ran.
 2. **The tool never fetches signing keys.** A key fetched over the same channel
    as the thing it authenticates proves nothing. Keys come from a keyring.
-3. **`--fingerprint` stays required.** `gpg` exits 0 for a good signature from
-   any key in the keyring, so the pin is what makes "signed" meaningful.
+3. **`--fingerprint` stays required** whenever a repository is the source. `gpg`
+   exits 0 for a good signature from any key in the keyring, so the pin is what
+   makes "signed" meaningful.
 4. **Only `SHA256:` is read from `Release`.** Never fall back to `MD5Sum:` or
    `SHA1:`, even if a repository offers nothing else — fail instead.
 5. **`src/version.ts` is a port, not an approximation.** Any change must keep
@@ -71,6 +81,7 @@ the record.
 
 - `vercmp.test.ts` — differential against `dpkg`, no network.
 - `control.test.ts` — pure parser tests on fixtures, no network.
+- `deb.test.ts` — argument classification (`.deb` vs. repository URL), no network.
 - `tamper.test.ts` — mirrors a real signed repository over `Bun.serve` and checks
   that tampering is rejected. A valid signature can't be fabricated, so it needs a
   repository named by `APT_TEST_REPO` / `APT_TEST_PACKAGE` /

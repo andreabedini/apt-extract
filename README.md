@@ -6,12 +6,14 @@ matter, and none of the parts that would lie to you.
 
 ```
 bun index.ts <repo-url> <package> --fingerprint <FPR> [options]
+bun index.ts <deb> [options]                 # one .deb: a local path or a URL
 ```
 
 or, from a compiled binary (see [Building](#building)):
 
 ```
 apt-extract <repo-url> <package> --fingerprint <FPR> [options]
+apt-extract <deb> [options]
 ```
 
 ## Why this exists
@@ -55,6 +57,46 @@ This tool keeps all three.
    `<dest>/<package>`, leaving a `.installed.json` stamp behind.
 7. Writes `~/.config/environment.d/50-<package>.conf` so the desktop session can
    see `bin/` and `share/`.
+
+Steps 4-7 also work on their own, for a `.deb` you already have or a URL that
+points straight at one — see [A single .deb](#a-single-deb).
+
+## A single .deb
+
+Sometimes there is no repository: a vendor links one `.deb` from a download
+page, or you already have the file. Naming it as the only argument does the rest
+of the work — unpack, subtree, `/opt`, `environment.d` — without a repository:
+
+```sh
+apt-extract ./some-app_1.2.3_amd64.deb
+apt-extract https://example.com/downloads/some-app_1.2.3_amd64.deb
+```
+
+One argument is read as a `.deb` when it ends in `.deb` or names a file that
+exists; otherwise it is a repository URL missing its package name, and that is
+what the error says. The package name, version and architecture come from the
+file's own control data — the same fields `dpkg-deb -f` prints — so there is
+nothing to pass and nothing to get wrong.
+
+**Nothing vouches for a file named this way.** There is no signed index in this
+mode, which is the whole of what steps 1-3 above were for, so the tool prints
+the SHA256 it computed and says plainly that it checked it against nothing:
+
+```
+sha256 3f9a...
+warning: no signed index and no --sha256 — nothing vouches for this file
+```
+
+If the vendor publishes a digest, pass it as `--sha256 <hex>` and it becomes a
+check that can fail — and a downloaded file is only reused from the cache when
+it still matches one. The install stamp records which of the two happened
+(`"trust": "signed-index"`, `"sha256"` or `"none"`), because "installed from a
+signed repository" and "installed from a file I found" are different things to
+have in `/opt`.
+
+The repository options are refused here rather than ignored: `--fingerprint` on
+a lone `.deb` would read as a signature check that never happened, and
+`--version` or `--list` have no index to work from.
 
 ## Building
 
@@ -173,24 +215,25 @@ shell alias so the URL and fingerprint live in one place.
 ## Options
 
 ```
-required
-  --fingerprint <FPR>   fingerprint of the key that must have signed the index
-
-selecting a version
+from a repository
+  --fingerprint <FPR>   required: fingerprint of the key that must have signed
+                        the index
+  --keyring <file>      verify against this keyring instead of your default one
+  --suite <s>           default: stable
+  --component <c>       default: main
+  --arch <a>            default: dpkg --print-architecture
   --list                list available versions and exit
   --version <v>         install this exact version (default: newest)
   --pick                choose interactively (needs a terminal)
+
+from a single .deb
+  --sha256 <hex>        the digest the .deb must have. Without it the digest is
+                        printed but there is nothing to check it against.
 
 where things go
   --dest <dir>          parent directory (default: /opt) -> <dest>/<package>
   --from <subdir>       subtree of the .deb to install (default: auto-detected)
   --no-environment-d    don't write the environment.d drop-in
-
-repository layout
-  --suite <s>           default: stable
-  --component <c>       default: main
-  --arch <a>            default: dpkg --print-architecture
-  --keyring <file>      verify against this keyring instead of your default one
 
 other
   --check               report installed vs. selected version, then exit
@@ -251,6 +294,8 @@ bun test
   (`1.24012.11` > `1.24012.9`, `1.0~rc1` < `1.0`); each case is checked
   differentially against `dpkg --compare-versions`. No network.
 - `control.test.ts` — parser tests on `Packages` and `Release` fixtures. No network.
+- `deb.test.ts` — which single argument is a `.deb` and which is a repository URL.
+  No network.
 - `tamper.test.ts` — serves a local mirror of a real signed repository and asserts
   that a modified `InRelease`, a modified package index, a good signature from an
   unexpected key, and a missing key are each refused. A valid signature can't be

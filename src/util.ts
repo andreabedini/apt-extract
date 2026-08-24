@@ -35,3 +35,10 @@ export function cacheDir(): string {
 	const xdg = process.env.XDG_CACHE_HOME;
 	return join(xdg && isAbsolute(xdg) ? xdg : join(homedir(), ".cache"), "apt-extract");
 }
+
+/** sha256 of a file, read in chunks — a .deb can be hundreds of MiB. */
+export async function hashFile(path: string): Promise<string> {
+	const hasher = new Bun.CryptoHasher("sha256");
+	for await (const chunk of Bun.file(path).stream()) hasher.update(chunk);
+	return hasher.digest("hex");
+}

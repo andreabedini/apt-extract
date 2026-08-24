@@ -10,10 +10,23 @@ const STAMP = ".installed.json";
 export type Stamp = {
 	package: string;
 	version: string;
-	repo: string;
-	suite: string;
 	architecture: string;
 	subtree: string;
+	/** where it came from: a repository base URL, or the .deb's path or URL */
+	source: string;
+	/** the digest of the .deb that was unpacked */
+	sha256: string;
+	/**
+	 * What that digest rests on. "signed-index" is the whole chain — a pinned
+	 * signature over the Release, which vouches for the index, which vouches
+	 * for the .deb. "sha256" is a digest the caller supplied out of band, and
+	 * "none" means a .deb was named directly and nothing vouched for it. It is
+	 * recorded because "installed from a signed repository" and "installed from
+	 * a file I found" are different things to have on disk.
+	 */
+	trust: "signed-index" | "sha256" | "none";
+	/** repository suite, when it came from a repository */
+	suite?: string;
 };
 
 export function readStamp(dest: string): Stamp | null {
