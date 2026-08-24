@@ -25,7 +25,7 @@ jobs:
       issues: write # semantic-release comments on what a release closes
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # the whole history: that is what the next version is derived from
           persist-credentials: false
@@ -35,7 +35,7 @@ jobs:
           bun-version: latest
 
       # semantic-release itself runs on Node, not Bun.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
 
