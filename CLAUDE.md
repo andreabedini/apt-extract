@@ -40,6 +40,9 @@ user sees. Logic belongs in `src/`, one concern per file:
 ## Conventions
 
 - Bun, not Node: `bun <file>`, `bun test`, `bunx <pkg>`. No dotenv.
+- `bun run build` compiles a standalone `dist/apt-extract`. Nothing may depend on
+  a source tree at runtime: `import.meta.dir` is a read-only embedded path in that
+  binary, so paths come from the environment (`cacheDir()`) or from arguments.
 - `Bun.$` for subprocesses, with `.quiet().nothrow()` whenever the exit code is
   something to inspect rather than something to crash on.
 - `Bun.file` / `Bun.write` for I/O; `node:fs` only for the sync directory checks.

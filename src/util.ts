@@ -1,5 +1,8 @@
 /** Small shared helpers. */
 
+import { homedir } from "node:os";
+import { isAbsolute, join } from "node:path";
+
 /** Print a message and stop. Every failure in this tool is fatal by design. */
 export function die(msg: string): never {
 	console.error(`error: ${msg}`);
@@ -19,4 +22,16 @@ export function sha256(bytes: Uint8Array): string {
 
 export function humanMiB(bytes: number): string {
 	return `${(bytes / 1048576).toFixed(1)} MiB`;
+}
+
+/**
+ * Where downloaded .deb files are kept.
+ *
+ * Not beside the source: a compiled binary's import.meta.dir points into Bun's
+ * read-only embedded filesystem, and a binary installed on $PATH has no source
+ * tree to sit next to anyway.
+ */
+export function cacheDir(): string {
+	const xdg = process.env.XDG_CACHE_HOME;
+	return join(xdg && isAbsolute(xdg) ? xdg : join(homedir(), ".cache"), "apt-extract");
 }

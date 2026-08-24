@@ -9,7 +9,7 @@
 import { $ } from "bun";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
 import { chooseSubtree, download, unpack } from "./src/deb.ts";
 import { writeEnvironmentD } from "./src/environment-d.ts";
@@ -17,9 +17,12 @@ import { normalizeFingerprint } from "./src/gpg.ts";
 import { describeInstalled, installedVersion, installTree, type Stamp } from "./src/install.ts";
 import { fetchPackages, fetchRelease, versionsOf, type RepoRef } from "./src/repo.ts";
 import { choose, listVersions } from "./src/select.ts";
-import { die, humanMiB } from "./src/util.ts";
+import { cacheDir, die, humanMiB } from "./src/util.ts";
 
-const USAGE = `usage: index.ts <repo-url> <package> --fingerprint <FPR> [options]
+// "index.ts" when run from source, "apt-extract" from the compiled binary.
+const invoked = basename(Bun.argv[1] ?? "index.ts");
+
+const USAGE = `usage: ${invoked} <repo-url> <package> --fingerprint <FPR> [options]
 
   <repo-url>            base of the apt repository — the URL from a sources.list
                         "deb" line, e.g. https://apt.example.com/some-app/stable
@@ -126,7 +129,7 @@ try {
 		process.exit(0);
 	}
 
-	const deb = await download(chosen, ref.url, join(import.meta.dir, "cache"));
+	const deb = await download(chosen, ref.url, cacheDir());
 
 	console.log("unpacking...");
 	const root = await unpack(deb, join(work, "root"));

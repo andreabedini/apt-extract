@@ -8,6 +8,12 @@ matter, and none of the parts that would lie to you.
 bun index.ts <repo-url> <package> --fingerprint <FPR> [options]
 ```
 
+or, from a compiled binary (see [Building](#building)):
+
+```
+apt-extract <repo-url> <package> --fingerprint <FPR> [options]
+```
+
 ## Why this exists
 
 Some vendors ship a Linux desktop app as a `.deb` and an apt repository, and
@@ -42,12 +48,37 @@ This tool keeps all three.
 4. Picks a version: newest by default, `--version` for an exact one, `--pick` for
    a prompt, `--list` to just look.
 5. Downloads the `.deb` and checks its size and SHA256 against that verified
-   index, hashing on the way to disk so nothing large is held in memory. A cached
-   file is reused only if it still matches.
+   index, hashing on the way to disk so nothing large is held in memory. Downloads
+   are kept in `${XDG_CACHE_HOME:-~/.cache}/apt-extract`, and a cached file is
+   reused only if it still matches.
 6. `dpkg-deb -x`, then `sudo rsync -a --delete` the right subtree into
    `<dest>/<package>`, leaving a `.installed.json` stamp behind.
 7. Writes `~/.config/environment.d/50-<package>.conf` so the desktop session can
    see `bin/` and `share/`.
+
+## Building
+
+`bun run build` links everything — the entry point, `src/`, and a Bun runtime —
+into one executable at `dist/apt-extract`, which runs on a machine with no `bun`
+installed:
+
+```sh
+bun run build
+./dist/apt-extract --help
+sudo install -m 0755 dist/apt-extract /usr/local/bin/   # optional
+```
+
+It is a Bun standalone binary, so it is large (~90 MiB) and built for the host
+platform. It is not minified — 13 KB saved is worth less than a stack trace that
+still names its own functions. To build for another platform, add a target:
+
+```sh
+bun build --compile --sourcemap --target=bun-linux-arm64 index.ts \
+  --outfile dist/apt-extract-arm64
+```
+
+The binary still shells out to `gpg`, `dpkg-deb`, `rsync` and `sudo` — see
+Requirements below. Only `bun` stops being needed.
 
 ## Requirements
 
