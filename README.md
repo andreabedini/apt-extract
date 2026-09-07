@@ -159,15 +159,43 @@ The workflow needs no secrets beyond the `GITHUB_TOKEN` Actions provides.
 
 ## Requirements
 
-`bun` (not needed for a released binary), `gpg`, `rsync`, and `sudo`. Run it as
-your normal user — it refuses to run as root and calls `sudo` only for the two
-commands that need it.
+Three external programs, and no others:
 
-`dpkg` is **not** required. The `.deb` is read here — the `ar` container, the
-tar inside it, and gzip, xz, zstd or bzip2 around that — so a machine with no
-Debian tooling at all can install from a Debian repository. Where `dpkg` does
-happen to be installed, it is still asked to confirm version ordering, because
-it is the authority on that and the check is free.
+| program | needed when                | for                                        |
+| ------- | -------------------------- | ------------------------------------------ |
+| `gpg`   | a repository is the source | verifying the `InRelease` clearsignature   |
+| `sudo`  | something is installed     | `mkdir -p` and `rsync`, and nothing else   |
+| `rsync` | something is installed     | the staged tree into `<dest>/<package>`    |
+
+Which of the three a given run touches follows from what it does. `--list` and
+`--check` against a repository verify the index and stop, so they need `gpg` and
+neither of the other two. A lone `.deb` never verifies a signature, so it never
+runs `gpg`. Nothing reaches for `sudo` or `rsync` until there is a tree to put
+in place.
+
+Two more are used when they are there and are never required:
+
+| program     | when present                                                       |
+| ----------- | ------------------------------------------------------------------ |
+| `dpkg`      | asked to confirm the version ordering this program worked out       |
+| `systemctl` | `--user daemon-reload`, so units started later see the new variables |
+
+Neither failing stops an install: without `dpkg` the ordering stands on
+`src/version.ts` alone, and a `systemctl` that is absent or fails prints "log out
+and back in instead".
+
+`bun` is needed only to run from source; a released binary carries its own
+runtime. Everything else a `.deb` install usually implies — `dpkg-deb`, `ar`,
+`tar`, `xz`, `zstd`, `bzip2`, `curl` — is absent from that list on purpose.
+
+Run it as your normal user. It refuses to run as root, and `sudo` covers exactly
+the two commands above.
+
+That `dpkg` is missing from the required list is the point. The `.deb` is read
+here — the `ar` container, the tar inside it, and gzip, xz, zstd or bzip2 around
+that — so a machine with no Debian tooling at all can install from a Debian
+repository. Where `dpkg` happens to be installed it is still asked about version
+ordering, because it is the authority on that and the check is free.
 
 `gpg` stays a dependency on purpose. Verifying a signature is the one thing this
 program exists to get right, and moving that into a bundled library would trade
