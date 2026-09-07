@@ -371,6 +371,32 @@ test("symlink targets are recorded exactly as the package wrote them", async () 
 	}
 });
 
+test("mtimes are restored on files, directories and symlinks alike", async () => {
+	const dir = work();
+	try {
+		const into = join(dir, "into");
+		await extractTar(
+			bytes(
+				tar([
+					{ path: "./usr/", type: "5", mode: 0o755 },
+					{ path: "./usr/file", body: "x" },
+					// A symlink needs lutimes, not utimes: utimes follows the link,
+					// which here points at a file that does not exist yet.
+					{ path: "./usr/link", type: "2", link: "missing" },
+				]),
+			),
+			into,
+		);
+		// The fixed mtime `tar()` writes into every header.
+		const want = 0o14000000000 * 1000;
+		expect(lstatSync(join(into, "usr")).mtime.getTime()).toBe(want);
+		expect(lstatSync(join(into, "usr/file")).mtime.getTime()).toBe(want);
+		expect(lstatSync(join(into, "usr/link")).mtime.getTime()).toBe(want);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
 test("a versioned-framework symlink chain comes out whole", async () => {
 	// The shape node-tar's own extractor refuses: a "Current" link, and then a
 	// link whose target reaches through it. libnetclasses0 in squeeze is real.

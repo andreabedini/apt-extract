@@ -35,6 +35,7 @@ import {
 	createWriteStream,
 	linkSync,
 	lstatSync,
+	lutimesSync,
 	mkdirSync,
 	rmSync,
 	symlinkSync,
@@ -147,6 +148,9 @@ function place(
 	if (type === "SymbolicLink") {
 		// The target is data, recorded as the package wrote it and never followed.
 		symlinkSync(String(entry.linkpath), target);
+		// lutimes, not utimes: the link's own mtime, not that of whatever it
+		// points at — which at this moment may not have been written yet.
+		if (mtime) lutimesSync(target, mtime, mtime);
 		return null;
 	}
 
