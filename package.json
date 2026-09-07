@@ -13,5 +13,10 @@
     "build:release": "bun scripts/build-release.ts",
     "test": "bun test",
     "typecheck": "tsc"
+  },
+  "dependencies": {
+    "seek-bzip": "^2.0.0",
+    "tar": "^7.5.22",
+    "xz-decompress": "^0.2.3"
   }
 }

@@ -10,11 +10,11 @@
 //
 // See README.md for the why, and --help for the how.
 
-import { $ } from "bun";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
+import { hostArch } from "./src/arch.ts";
 import { chooseSubtree, debControl, download, isDebArgument, isUrl, obtainDeb, unpack } from "./src/deb.ts";
 import { writeEnvironmentD } from "./src/environment-d.ts";
 import { normalizeFingerprint } from "./src/gpg.ts";
@@ -45,7 +45,7 @@ from a repository
   --keyring <file>      verify against this keyring instead of your default one
   --suite <s>           default: stable
   --component <c>       default: main
-  --arch <a>            default: dpkg --print-architecture
+  --arch <a>            default: this machine's architecture
   --list                list the available versions and exit
   --version <v>         install this exact version (default: the newest)
   --pick                choose interactively (needs a terminal)
@@ -172,7 +172,7 @@ async function fromRepository(repoArg: string, pkgName: string): Promise<Selecti
 		url: repoArg.replace(/\/+$/, ""),
 		suite: opt.suite ?? "stable",
 		component: opt.component ?? "main",
-		arch: opt.arch ?? (await $`dpkg --print-architecture`.quiet().text()).trim(),
+		arch: opt.arch ?? hostArch(),
 	};
 	const trust = { fingerprint: normalizeFingerprint(opt.fingerprint!), keyring: opt.keyring };
 	const dest = destFor(pkgName);

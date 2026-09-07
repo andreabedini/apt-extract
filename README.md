@@ -53,8 +53,8 @@ This tool keeps all three.
    index, hashing on the way to disk so nothing large is held in memory. Downloads
    are kept in `${XDG_CACHE_HOME:-~/.cache}/apt-extract`, and a cached file is
    reused only if it still matches.
-6. `dpkg-deb -x`, then `sudo rsync -a --delete` the right subtree into
-   `<dest>/<package>`, leaving a `.installed.json` stamp behind.
+6. Unpacks the `.deb` itself — no `dpkg-deb` — then `sudo rsync -a --delete` the
+   right subtree into `<dest>/<package>`, leaving a `.installed.json` stamp behind.
 7. Writes `~/.config/environment.d/50-<package>.conf` so the desktop session can
    see `bin/` and `share/`.
 
@@ -119,8 +119,8 @@ bun build --compile --sourcemap --target=bun-linux-arm64 index.ts \
   --outfile dist/apt-extract-arm64
 ```
 
-The binary still shells out to `gpg`, `dpkg-deb`, `rsync` and `sudo` — see
-Requirements below. Only `bun` stops being needed.
+The binary still shells out to `gpg`, `rsync` and `sudo` — see Requirements
+below. `bun` and `dpkg` stop being needed.
 
 ## Releases
 
@@ -159,9 +159,24 @@ The workflow needs no secrets beyond the `GITHUB_TOKEN` Actions provides.
 
 ## Requirements
 
-`bun`, `gpg`, `dpkg` and `dpkg-deb` (Fedora: `dnf install dpkg`), `rsync`, and
-`sudo`. Run it as your normal user — it refuses to run as root and calls `sudo`
-only for the two commands that need it.
+`bun` (not needed for a released binary), `gpg`, `rsync`, and `sudo`. Run it as
+your normal user — it refuses to run as root and calls `sudo` only for the two
+commands that need it.
+
+`dpkg` is **not** required. The `.deb` is read here — the `ar` container, the
+tar inside it, and gzip, xz, zstd or bzip2 around that — so a machine with no
+Debian tooling at all can install from a Debian repository. Where `dpkg` does
+happen to be installed, it is still asked to confirm version ordering, because
+it is the authority on that and the check is free.
+
+`gpg` stays a dependency on purpose. Verifying a signature is the one thing this
+program exists to get right, and moving that into a bundled library would trade
+an audited implementation for a supply-chain one to save a dependency that
+anyone using an apt repository already has.
+
+Two encodings `deb(5)` permits are not read: `lzma` (deprecated by dpkg, which
+has never written it) and a bzip2 member over 64 MiB, which cannot be streamed.
+Both say so and name `dpkg-deb` as the way out.
 
 ## Keys
 
@@ -221,7 +236,7 @@ from a repository
   --keyring <file>      verify against this keyring instead of your default one
   --suite <s>           default: stable
   --component <c>       default: main
-  --arch <a>            default: dpkg --print-architecture
+  --arch <a>            default: this machine's architecture
   --list                list available versions and exit
   --version <v>         install this exact version (default: newest)
   --pick                choose interactively (needs a terminal)
@@ -296,6 +311,12 @@ bun test
 - `control.test.ts` — parser tests on `Packages` and `Release` fixtures. No network.
 - `deb.test.ts` — which single argument is a `.deb` and which is a repository URL.
   No network.
+- `debformat.test.ts` — what the `.deb` reader accepts and what it refuses: member
+  order, `ar` long-name extensions, every compression `deb(5)` allows, and the
+  hostile shapes — a path that climbs out of the package, an absolute path, a
+  planted symlink written through, a hard link pointing outside. The fixtures are
+  built byte by byte, because `tar` and `ar` decline to produce them. No network,
+  no `dpkg`, no `tar`.
 - `tamper.test.ts` — serves a local mirror of a real signed repository and asserts
   that a modified `InRelease`, a modified package index, a good signature from an
   unexpected key, and a missing key are each refused. A valid signature can't be

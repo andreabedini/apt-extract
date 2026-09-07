@@ -1,9 +1,11 @@
 /** Fetching and unpacking the .deb itself, whether an index named it or you did. */
 
-import { $ } from "bun";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { debMembers, memberStream } from "./ar.ts";
+import { decompressStream } from "./compress.ts";
 import { parseControl, type Stanza } from "./control.ts";
+import { extractTar, readTarEntry } from "./tar.ts";
 import { die, get, hashFile, humanMiB } from "./util.ts";
 
 /**
@@ -97,19 +99,40 @@ export async function obtainDeb(
 
 /** The .deb's own control stanza — where the package name and version come from. */
 export async function debControl(path: string): Promise<Stanza> {
-	const res = await $`dpkg-deb -f ${path}`.quiet().nothrow();
-	if (res.exitCode !== 0) {
-		die(`dpkg-deb cannot read ${basename(path)} as a .deb:\n${res.stderr.toString().trim()}`);
-	}
-	const stanza = parseControl(res.stdout.toString())[0];
+	const text = await reading(path, async () => {
+		const members = await debMembers(path);
+		const control = decompressStream(members.control.name, memberStream(path, members.control));
+		return readTarEntry(control, "control");
+	});
+	if (text === null) die(`${basename(path)} has no control file inside its control member`);
+
+	const stanza = parseControl(text)[0];
 	if (!stanza?.get("Package")) die(`${basename(path)} has no Package field in its control data`);
 	return stanza;
 }
 
 /** Unpack the data archive. Maintainer scripts are not run and cannot be run this way. */
 export async function unpack(deb: string, into: string): Promise<string> {
-	await $`dpkg-deb -x ${deb} ${into}`;
+	await reading(deb, async () => {
+		const members = await debMembers(deb);
+		await extractTar(decompressStream(members.data.name, memberStream(deb, members.data)), into);
+	});
 	return into;
+}
+
+/**
+ * The seam between the format readers and this program.
+ *
+ * `src/ar.ts` and `src/tar.ts` throw, so that what they refuse can be tested
+ * directly rather than through a subprocess; here that becomes the fatal error
+ * every other failure in this tool already is.
+ */
+async function reading<T>(path: string, read: () => Promise<T>): Promise<T> {
+	try {
+		return await read();
+	} catch (e) {
+		return die(`${basename(path)}: ${e instanceof Error ? e.message : String(e)}`);
+	}
 }
 
 /**

@@ -61,18 +61,33 @@ export async function fetchPackages(rel: Release, ref: RepoRef): Promise<Stanza[
 	return parseControl(new TextDecoder().decode(bytes));
 }
 
+/** Asked once: the answer cannot change while we run, and each miss costs a spawn. */
+let dpkgPresent: Promise<boolean> | undefined;
+function haveDpkg(): Promise<boolean> {
+	dpkgPresent ??= $`dpkg --version`
+		.quiet()
+		.nothrow()
+		.then((r) => r.exitCode === 0);
+	return dpkgPresent;
+}
+
 /** The stanzas for one binary package on one architecture, oldest version first. */
 export async function versionsOf(index: Stanza[], pkg: string, arch: string): Promise<Stanza[]> {
 	const sorted = index
 		.filter((p) => p.get("Package") === pkg && p.get("Architecture") === arch)
 		.sort((a, b) => compareVersions(a.get("Version") ?? "", b.get("Version") ?? ""));
 
-	// dpkg is the authority on version ordering; make sure our port agrees.
-	for (let i = 1; i < sorted.length; i++) {
-		const lo = sorted[i - 1]!.get("Version")!;
-		const hi = sorted[i]!.get("Version")!;
-		if ((await $`dpkg --compare-versions ${lo} le ${hi}`.quiet().nothrow()).exitCode !== 0) {
-			die(`version ordering disagrees with dpkg: put ${lo} before ${hi}`);
+	// dpkg is the authority on version ordering, so where it is installed we ask
+	// it whether the port in version.ts agrees. It is not a requirement: this
+	// program is meant for machines that have no dpkg, and the standing check on
+	// the port is vercmp.test.ts, which is differential against dpkg by design.
+	if (await haveDpkg()) {
+		for (let i = 1; i < sorted.length; i++) {
+			const lo = sorted[i - 1]!.get("Version")!;
+			const hi = sorted[i]!.get("Version")!;
+			if ((await $`dpkg --compare-versions ${lo} le ${hi}`.quiet().nothrow()).exitCode !== 0) {
+				die(`version ordering disagrees with dpkg: put ${lo} before ${hi}`);
+			}
 		}
 	}
 	return sorted;
